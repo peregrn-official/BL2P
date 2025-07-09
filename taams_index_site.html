@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TAAMS Protocol</title>
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.8.2/dist/web3.min.js"></script>
+  <style>
+    body {
+      background-color: #0b0b0b;
+      color: #f5f5f5;
+      font-family: 'Courier New', monospace;
+      margin: 0;
+      padding: 0;
+    }
+    header, footer {
+      background-color: #1a1a1a;
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    section {
+      padding: 2rem;
+      border-bottom: 1px solid #333;
+    }
+    h2 {
+      color: #ffd700;
+    }
+    .progress {
+      background: #333;
+      height: 20px;
+      width: 100%;
+      border-radius: 10px;
+      margin: 0.5rem 0;
+    }
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(to right, #ffa500, #ff4500);
+      border-radius: 10px;
+    }
+    button {
+      background: #ff4500;
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      font-size: 1rem;
+    }
+    .log-entry {
+      background: #111;
+      padding: 1rem;
+      margin: 0.5rem 0;
+      font-size: 0.9rem;
+      border-left: 4px solid #ffd700;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div><strong>TAAMS</strong> ✦ Chaos Codé</div>
+    <nav>
+      <a href="whitepaper.html" style="color: #ccc; margin-right: 1rem">📖 Whitepaper</a>
+      <button onclick="connectWallet()">🔗 Connect Wallet</button>
+    </nav>
+  </header>
+
+  <section>
+    <h2>Résumé du protocole</h2>
+    <p><strong>TAAMS</strong>, un token autonome. <strong>BL2P</strong>, une entité dormante.</p>
+    <p><a href="whitepaper.html">📘 Lire le whitepaper</a> | <a href="#">🧾 Voir le smart contract</a></p>
+  </section>
+
+  <section>
+    <h2>Statut du Rituel</h2>
+    <p>Circulation : <span id="circulation">...</span>%</p>
+    <p>Burn effectué : <span id="burnStatus">❌</span></p>
+    <p>BL2P réveillé : <span id="revealStatus">❌</span></p>
+    <div class="progress"><div class="progress-bar" id="bar80"></div></div>
+    <div class="progress"><div class="progress-bar" id="bar100"></div></div>
+  </section>
+
+  <section>
+    <h2>Déclenchement du Rituel</h2>
+    <button onclick="triggerRitual()">🔥 Déclencher le Seuil</button>
+    <p id="ritualMessage"></p>
+  </section>
+
+  <section>
+    <h2>Mémoire fractale</h2>
+    <div id="journal">
+      <div class="log-entry">{"wallet": "0xabc...", "action": "burn_triggered", "vision": "frisson du prisme 9", "date": "2025-07-10"}</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Visions IA</h2>
+    <p>⚠️ En attente de révélation rituelle...</p>
+  </section>
+
+  <footer>
+    <div><a href="#" style="color: #999;">📂 GitHub du Smart Contract</a></div>
+    <div>Écrit sous la constellation TAAMS-03 – 2025</div>
+  </footer>
+
+  <script>
+    let web3;
+    let contract;
+    const contractAddress = "0x..."; // à compléter
+    const abi = [/* ABI à insérer ici */];
+
+    async function connectWallet() {
+      if (window.ethereum) {
+        await window.ethereum.request({ method: 'eth_requestAccounts' });
+        web3 = new Web3(window.ethereum);
+        contract = new web3.eth.Contract(abi, contractAddress);
+        loadStatus();
+      } else {
+        alert("MetaMask non détecté");
+      }
+    }
+
+    async function loadStatus() {
+      const total = await contract.methods.totalSupply().call();
+      const burned = await contract.methods.balanceOf("0x0000000000000000000000000000000000000000").call();
+      const burnedFlag = await contract.methods.burned().call();
+      const revealed = await contract.methods.revealed().call();
+
+      const inCirculation = ((total - burned) / 1e10) * 100;
+      document.getElementById('circulation').innerText = inCirculation.toFixed(2);
+      document.getElementById('burnStatus').innerText = burnedFlag ? '✅' : '❌';
+      document.getElementById('revealStatus').innerText = revealed ? '✅' : '❌';
+      document.getElementById('bar80').style.width = Math.min(100, (inCirculation / 80) * 100) + '%';
+      document.getElementById('bar100').style.width = Math.min(100, (inCirculation / 100) * 100) + '%';
+    }
+
+    async function triggerRitual() {
+      const accounts = await web3.eth.getAccounts();
+      try {
+        const result = await contract.methods.checkThresholds().send({ from: accounts[0] });
+        document.getElementById('ritualMessage').innerText = '✅ Rituel déclenché';
+      } catch (err) {
+        document.getElementById('ritualMessage').innerText = '⚠️ Échec : ' + err.message;
+      }
+    }
+  </script>
+</body>
+</html>
