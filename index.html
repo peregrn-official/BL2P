@@ -1,679 +1,307 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TAAMS DApp - Roue de la Chance</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            background-color: #f0f0f0;
-            padding: 20px;
-        }
-        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 10px; }
-        button {
-            padding: 10px 20px;
-            margin: 10px;
-            font-size: 16px;
-            cursor: pointer;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 5px;
-        }
-        button:hover { background-color: #0056b3; }
-        button:disabled { background-color: #cccccc; cursor: not-allowed; }
-        #wheel {
-            width: 200px;
-            height: 200px;
-            border-radius: 50%;
-            background: conic-gradient(red, yellow, green, blue, purple);
-            margin: 20px auto;
-            display: none;
-        }
-        #wheel.spinning {
-            animation: spin 2s linear infinite;
-        }
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-        #status { margin: 20px; font-weight: bold; }
-        input { padding: 8px; margin: 10px; font-size: 16px; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TAAMS DApp - Roue de la Chance</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #f0f0f0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 600px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 10px;
+      font-size: 16px;
+      cursor: pointer;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    #wheel {
+      width: 200px;
+      height: 200px;
+      border-radius: 50%;
+      background: conic-gradient(red, yellow, green, blue, purple);
+      margin: 20px auto;
+      display: none;
+    }
+    #wheel.spinning {
+      animation: spin 2s linear infinite;
+    }
+    @keyframes spin {
+      from {
+        transform: rotate(0deg);
+      }
+      to {
+        transform: rotate(360deg);
+      }
+    }
+    #status {
+      margin: 20px;
+      font-weight: bold;
+    }
+    .notice {
+      font-size: 14px;
+      color: #888;
+      margin-top: 10px;
+    }
+    input {
+      padding: 8px;
+      margin: 10px;
+      font-size: 16px;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>TAAMS DApp</h1>
-        <p id="status">Connectez votre portefeuille</p>
-        <button onclick="connectWallet()">Connecter MetaMask</button>
-        <div>
-            <input id="burnAmount" type="number" placeholder="Montant à brûler (TAAMS)" min="1">
-            <button onclick="burnTokens()">Brûler TAAMS</button>
-        </div>
-        <div>
-            <input id="stakeAmount" type="number" placeholder="Montant à staker (min 1000 TAAMS)" min="1000">
-            <button onclick="stakeTokens()">Staker TAAMS</button>
-        </div>
-        <button onclick="unstakeTokens()">Destaker TAAMS</button>
-        <button id="spinButton" onclick="spinWheel()" disabled>Tourner la roue</button>
-        <div id="wheel"></div>
+  <div class="container">
+    <h1>TAAMS DApp</h1>
+    <p id="status">Connectez votre portefeuille</p>
+    <button onclick="connectWallet()">Connecter MetaMask</button>
+
+    <div>
+      <input id="burnAmount" type="number" placeholder="Montant à brûler (TAAMS)" min="1" />
+      <button onclick="burnTokens()">Brûler TAAMS</button>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.0/dist/ethers.umd.min.js"></script>
-    <script>
-        // Configuration du contrat
-        const contractAddress = "0xA29A88632d550BadffE1C981a8C790654377C585";
-        const contractABI = [
-            {
-                "inputs": [],
-                "stateMutability": "nonpayable",
-                "type": "constructor"
-            },
-            {
-                "anonymous": false,
-                "inputs": [
-                    {"indexed": false, "internalType": "uint256", "name": "timestamp", "type": "uint256"},
-                    {"indexed": false, "internalType": "uint256", "name": "deadline", "type": "uint256"}
-                ],
-                "name": "BurnPhaseActivated",
-                "type": "event"
-            },
-            {
-                "anonymous": false,
-                "inputs": [
-                    {"indexed": true, "internalType": "address", "name": "user", "type": "address"},
-                    {"indexed": false, "internalType": "uint256", "name": "reward", "type": "uint256"}
-                ],
-                "name": "BL2PRewardClaimed",
-                "type": "event"
-            },
-            {
-                "anonymous": false,
-                "inputs": [
-                    {"indexed": false, "internalType": "uint256", "name": "timestamp", "type": "uint256"}
-                ],
-                "name": "BL2PRevealed",
-                "type": "event"
-            },
-            {
-                "anonymous": false,
-                "inputs": [
-                    {"indexed": true, "internalType": "address", "name": "owner", "type": "address"},
-                    {"indexed": true, "internalType": "address", "name": "spender", "type": "address"},
-                    {"indexed": false, "internalType": "uint256", "name": "value", "type": "uint256"}
-                ],
-                "name": "Approval",
-                "type": "event"
-            },
-            {
-                "anonymous": false,
-                "inputs": [
-                    {"indexed": true, "internalType": "address", "name": "previousOwner", "type": "address"},
-                    {"indexed": true, "internalType": "address", "name": "newOwner", "type": "address"}
-                ],
-                "name": "OwnershipTransferred",
-                "type": "event"
-            },
-            {
-                "anonymous": false,
-                "inputs": [
-                    {"indexed": false, "internalType": "address", "name": "account", "type": "address"}
-                ],
-                "name": "Paused",
-                "type": "event"
-            },
-            {
-                "anonymous": false,
-                "inputs": [
-                    {"indexed": true, "internalType": "address", "name": "user", "type": "address"},
-                    {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"},
-                    {"indexed": false, "internalType": "uint256", "name": "timestamp", "type": "uint256"}
-                ],
-                "name": "Staked",
-                "type": "event"
-            },
-            {
-                "anonymous": false,
-                "inputs": [
-                    {"indexed": true, "internalType": "address", "name": "user", "type": "address"},
-                    {"indexed": false, "internalType": "uint256", "name": "reward", "type": "uint256"}
-                ],
-                "name": "StakingRewardClaimed",
-                "type": "event"
-            },
-            {
-                "anonymous": false,
-                "inputs": [
-                    {"indexed": true, "internalType": "address", "name": "burner", "type": "address"},
-                    {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"},
-                    {"indexed": false, "internalType": "uint256", "name": "totalBurned", "type": "uint256"}
-                ],
-                "name": "TokensBurned",
-                "type": "event"
-            },
-            {
-                "anonymous": false,
-                "inputs": [
-                    {"indexed": true, "internalType": "address", "name": "from", "type": "address"},
-                    {"indexed": true, "internalType": "address", "name": "to", "type": "address"},
-                    {"indexed": false, "internalType": "uint256", "name": "value", "type": "uint256"}
-                ],
-                "name": "Transfer",
-                "type": "event"
-            },
-            {
-                "anonymous": false,
-                "inputs": [
-                    {"indexed": true, "internalType": "address", "name": "user", "type": "address"},
-                    {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"},
-                    {"indexed": false, "internalType": "uint256", "name": "timestamp", "type": "uint256"}
-                ],
-                "name": "Unstaked",
-                "type": "event"
-            },
-            {
-                "anonymous": false,
-                "inputs": [
-                    {"indexed": false, "internalType": "address", "name": "account", "type": "address"}
-                ],
-                "name": "Unpaused",
-                "type": "event"
-            },
-            {
-                "anonymous": false,
-                "inputs": [
-                    {"indexed": true, "internalType": "address", "name": "user", "type": "address"},
-                    {"indexed": false, "internalType": "uint256", "name": "reward", "type": "uint256"},
-                    {"indexed": false, "internalType": "uint256", "name": "timestamp", "type": "uint256"}
-                ],
-                "name": "WheelSpun",
-                "type": "event"
-            },
-            {
-                "inputs": [],
-                "name": "ACTIVATION_THRESHOLD",
-                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "BL2P_MAX_SUPPLY",
-                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "BURN_PHASE_DURATION",
-                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "BURN_TARGET",
-                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "MAX_SUPPLY",
-                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "STAKING_MIN_AMOUNT",
-                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "STAKING_REWARD_RATE",
-                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "WHEEL_MAX_REWARD",
-                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "WHEEL_MIN_REWARD",
-                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "WHEEL_RESERVE",
-                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "WHEEL_SPIN_PERIOD",
-                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [
-                    {"internalType": "address", "name": "owner", "type": "address"},
-                    {"internalType": "address", "name": "spender", "type": "address"}
-                ],
-                "name": "allowance",
-                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [
-                    {"internalType": "address", "name": "spender", "type": "address"},
-                    {"internalType": "uint256", "name": "amount", "type": "uint256"}
-                ],
-                "name": "approve",
-                "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
-                "stateMutability": "nonpayable",
-                "type": "function"
-            },
-            {
-                "inputs": [
-                    {"internalType": "address", "name": "account", "type": "address"}
-                ],
-                "name": "balanceOf",
-                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [
-                    {"internalType": "address", "name": "", "type": "address"}
-                ],
-                "name": "bl2pClaimed",
-                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "bl2pRevealed",
-                "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [
-                    {"internalType": "address", "name": "", "type": "address"}
-                ],
-                "name": "burnContributions",
-                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "burnDeadline",
-                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "burnPhaseActive",
-                "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "checkActivation",
-                "outputs": [],
-                "stateMutability": "nonpayable",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "claimBL2PReward",
-                "outputs": [],
-                "stateMutability": "nonpayable",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "decimals",
-                "outputs": [{"internalType": "uint8", "name": "", "type": "uint8"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [
-                    {"internalType": "address", "name": "spender", "type": "address"},
-                    {"internalType": "uint256", "name": "subtractedValue", "type": "uint256"}
-                ],
-                "name": "decreaseAllowance",
-                "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
-                "stateMutability": "nonpayable",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "getRemainingBurnable",
-                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [
-                    {"internalType": "address", "name": "user", "type": "address"}
-                ],
-                "name": "getPotentialBL2PReward",
-                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [
-                    {"internalType": "address", "name": "user", "type": "address"}
-                ],
-                "name": "getStakingInfo",
-                "outputs": [
-                    {"internalType": "uint256", "name": "amount", "type": "uint256"},
-                    {"internalType": "uint256", "name": "startTime", "type": "uint256"},
-                    {"internalType": "uint256", "name": "potentialReward", "type": "uint256"}
-                ],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [
-                    {"internalType": "address", "name": "user", "type": "address"}
-                ],
-                "name": "getWheelSpinEligibility",
-                "outputs": [
-                    {"internalType": "bool", "name": "eligible", "type": "bool"},
-                    {"internalType": "uint256", "name": "nextSpinTime", "type": "uint256"}
-                ],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [
-                    {"internalType": "address", "name": "spender", "type": "address"},
-                    {"internalType": "uint256", "name": "addedValue", "type": "uint256"}
-                ],
-                "name": "increaseAllowance",
-                "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
-                "stateMutability": "nonpayable",
-                "type": "function"
-            },
-            {
-                "inputs": [
-                    {"internalType": "address", "name": "", "type": "address"}
-                ],
-                "name": "lastWheelSpin",
-                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "name",
-                "outputs": [{"internalType": "string", "name": "", "type": "string"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "owner",
-                "outputs": [{"internalType": "address", "name": "", "type": "address"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [
-                    {"internalType": "uint256", "name": "amount", "type": "uint256"}
-                ],
-                "name": "participateInBurn",
-                "outputs": [],
-                "stateMutability": "nonpayable",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "pause",
-                "outputs": [],
-                "stateMutability": "nonpayable",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "paused",
-                "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "renounceOwnership",
-                "outputs": [],
-                "stateMutability": "nonpayable",
-                "type": "function"
-            },
-            {
-                "inputs": [
-                    {"internalType": "uint256", "name": "amount", "type": "uint256"}
-                ],
-                "name": "stake",
-                "outputs": [],
-                "stateMutability": "nonpayable",
-                "type": "function"
-            },
-            {
-                "inputs": [
-                    {"internalType": "address", "name": "", "type": "address"}
-                ],
-                "name": "stakes",
-                "outputs": [
-                    {"internalType": "uint256", "name": "amount", "type": "uint256"},
-                    {"internalType": "uint256", "name": "startTime", "type": "uint256"},
-                    {"internalType": "bool", "name": "active", "type": "bool"}
-                ],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "spinWheel",
-                "outputs": [],
-                "stateMutability": "nonpayable",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "symbol",
-                "outputs": [{"internalType": "string", "name": "", "type": "string"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "totalBurned",
-                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "totalStaked",
-                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "totalSupply",
-                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [
-                    {"internalType": "address", "name": "to", "type": "address"},
-                    {"internalType": "uint256", "name": "amount", "type": "uint256"}
-                ],
-                "name": "transfer",
-                "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
-                "stateMutability": "nonpayable",
-                "type": "function"
-            },
-            {
-                "inputs": [
-                    {"internalType": "address", "name": "from", "type": "address"},
-                    {"internalType": "address", "name": "to", "type": "address"},
-                    {"internalType": "uint256", "name": "amount", "type": "uint256"}
-                ],
-                "name": "transferFrom",
-                "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
-                "stateMutability": "nonpayable",
-                "type": "function"
-            },
-            {
-                "inputs": [
-                    {"internalType": "address", "name": "newOwner", "type": "address"}
-                ],
-                "name": "transferOwnership",
-                "outputs": [],
-                "stateMutability": "nonpayable",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "unpause",
-                "outputs": [],
-                "stateMutability": "nonpayable",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "unstake",
-                "outputs": [],
-                "stateMutability": "nonpayable",
-                "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "wheelRewardReserve",
-                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-                "stateMutability": "view",
-                "type": "function"
-            }
-        ];
+    <div>
+      <input id="stakeAmount" type="number" placeholder="Montant à staker (min 1000 TAAMS)" min="1000" />
+      <button onclick="stakeTokens()">Staker TAAMS</button>
+    </div>
 
-        let provider, signer, contract, userAddress;
+    <button onclick="unstakeTokens()">Destaker TAAMS</button>
 
-        async function connectWallet() {
-            if (window.ethereum) {
-                try {
-                    provider = new ethers.providers.Web3Provider(window.ethereum);
-                    await provider.send("eth_requestAccounts", []);
-                    signer = provider.getSigner();
-                    userAddress = await signer.getAddress();
-                    contract = new ethers.Contract(contractAddress, contractABI, signer);
-                    document.getElementById("status").innerText = `Connecté : ${userAddress}`;
-                    document.getElementById("spinButton").disabled = false;
-                    updateStatus();
-                } catch (error) {
-                    document.getElementById("status").innerText = `Erreur : ${error.message}`;
-                }
-            } else {
-                document.getElementById("status").innerText = "MetaMask non détecté";
-            }
+    <button id="spinButton" onclick="spinWheel()" disabled>Tourner la roue</button>
+    <div id="wheel"></div>
+    <p class="notice" id="eligibilityMsg"></p>
+  </div>
+<script src="https://cdn.jsdelivr.net/npm/ethers@5.7.0/dist/ethers.umd.min.js"></script>
+
+<script>
+  let provider, signer, contract, userAddress;
+
+  async function connectWallet() {
+    if (window.ethereum) {
+      try {
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+        signer = provider.getSigner();
+        userAddress = await signer.getAddress();
+
+        contract = new ethers.Contract(contractAddress, contractABI, signer);
+
+        document.getElementById("status").innerText = `✅ Connecté : ${userAddress}`;
+        updateStatus();
+      } catch (error) {
+        document.getElementById("status").innerText = `❌ Erreur connexion : ${error.message}`;
+      }
+    } else {
+      document.getElementById("status").innerText = "⚠️ MetaMask non détecté";
+    }
+  }
+
+  async function updateStatus() {
+    try {
+      if (!userAddress || !ethers.utils.isAddress(userAddress)) {
+        throw new Error("⚠️ Adresse utilisateur invalide ou non connectée");
+      }
+
+      const [balance, bl2pBalance, stakingInfo, eligibility] = await Promise.all([
+        contract.balanceOf(userAddress),
+        contract.bl2pClaimed(userAddress),
+        contract.getStakingInfo(userAddress),
+        contract.getWheelSpinEligibility(userAddress)
+      ]);
+
+      const eligible = eligibility.eligible;
+      const nextSpin = eligibility.nextSpinTime;
+
+      document.getElementById("status").innerHTML = `
+        <strong>Solde TAAMS</strong> : ${ethers.utils.formatEther(balance)} TAAMS<br>
+        <strong>Solde BL2P</strong> : ${ethers.utils.formatEther(bl2pBalance)} BL2P<br>
+        <strong>Staking</strong> : ${ethers.utils.formatEther(stakingInfo[0])} TAAMS<br>
+        <strong>Récompense staking</strong> : ${ethers.utils.formatEther(stakingInfo[2])} BL2P<br>
+        <strong>Prochain spin</strong> : ${
+          eligible ? "🎯 Disponible maintenant" : new Date(nextSpin * 1000).toLocaleString()
         }
+      `;
 
-        async function updateStatus() {
-            try {
-                const balance = await contract.balanceOf(userAddress);
-                const bl2pBalance = await contract.bl2pClaimed(userAddress);
-                const [eligible, nextSpin] = await contract.getWheelSpinEligibility(userAddress);
-                const stakingInfo = await contract.getStakingInfo(userAddress);
-                document.getElementById("status").innerHTML = `
-                    <strong>Solde TAAMS</strong> : ${ethers.utils.formatEther(balance)} TAAMS<br>
-                    <strong>Solde BL2P</strong> : ${ethers.utils.formatEther(bl2pBalance)} BL2P<br>
-                    <strong>Staking</strong> : ${ethers.utils.formatEther(stakingInfo[0])} TAAMS<br>
-                    <strong>Récompense staking</strong> : ${ethers.utils.formatEther(stakingInfo[2])} BL2P<br>
-                    <strong>Prochain spin</strong> : ${eligible ? "Maintenant" : new Date(nextSpin * 1000).toLocaleString()}
-                `;
-                document.getElementById("spinButton").disabled = !eligible || bl2pBalance == 0;
-            } catch (error) {
-                document.getElementById("status").innerText = `Erreur lors de la mise à jour : ${error.message}`;
-            }
-        }
+      const spinEligible = eligible && bl2pBalance.gt(0);
+      document.getElementById("spinButton").disabled = !spinEligible;
 
-        async function burnTokens() {
-            try {
-                const amount = document.getElementById("burnAmount").value;
-                if (!amount || amount <= 0) throw new Error("Montant invalide");
-                const tx = await contract.participateInBurn(ethers.utils.parseEther(amount));
-                await tx.wait();
-                document.getElementById("status").innerText = `Succès : ${amount} TAAMS brûlés`;
-                updateStatus();
-            } catch (error) {
-                document.getElementById("status").innerText = `Erreur : ${error.message}`;
-            }
-        }
+      document.getElementById("eligibilityMsg").innerText =
+        spinEligible ? "" : "🔒 Vous devez avoir des BL2P et être éligible pour tourner la roue.";
 
-        async function stakeTokens() {
-            try {
-                const amount = document.getElementById("stakeAmount").value;
-                if (!amount || amount < 1000) throw new Error("Montant minimum 1000 TAAMS");
-                const tx = await contract.stake(ethers.utils.parseEther(amount));
-                await tx.wait();
-                document.getElementById("status").innerText = `Succès : ${amount} TAAMS stakés`;
-                updateStatus();
-            } catch (error) {
-                document.getElementById("status").innerText = `Erreur : ${error.message}`;
-            }
-        }
+    } catch (error) {
+      document.getElementById("status").innerText = `❌ Erreur mise à jour : ${error.message}`;
+    }
+  }
+</script>
+<script>
+  async function burnTokens() {
+    try {
+      if (!contract || !userAddress) throw new Error("Portefeuille non connecté");
 
-        async function unstakeTokens() {
-            try {
-                const tx = await contract.unstake();
-                await tx.wait();
-                document.getElementById("status").innerText = "Succès : TAAMS destakés";
-                updateStatus();
-            } catch (error) {
-                document.getElementById("status").innerText = `Erreur : ${error.message}`;
-            }
-        }
+      const amount = document.getElementById("burnAmount").value;
+      if (!amount || amount <= 0) throw new Error("❌ Montant invalide");
 
-        async function spinWheel() {
-            try {
-                document.getElementById("wheel").style.display = "block";
-                document.getElementById("wheel").classList.add("spinning");
-                const tx = await contract.spinWheel();
-                const receipt = await tx.wait();
-                const event = receipt.events.find(e => e.event === "WheelSpun");
-                const reward = ethers.utils.formatEther(event.args.reward);
-                document.getElementById("status").innerText = `Succès : Gagné ${reward} TAAMS !`;
-                document.getElementById("wheel").classList.remove("spinning");
-                updateStatus();
-            } catch (error) {
-                document.getElementById("status").innerText = `Erreur : ${error.message}`;
-                document.getElementById("wheel").classList.remove("spinning");
-            }
+      const tx = await contract.participateInBurn(ethers.utils.parseEther(amount));
+      await tx.wait();
+
+      document.getElementById("status").innerText = `🔥 ${amount} TAAMS brûlés avec succès`;
+      updateStatus();
+    } catch (error) {
+      document.getElementById("status").innerText = `❌ Erreur burn : ${error.message}`;
+    }
+  }
+
+  async function stakeTokens() {
+    try {
+      if (!contract || !userAddress) throw new Error("Portefeuille non connecté");
+
+      const amount = document.getElementById("stakeAmount").value;
+      if (!amount || amount < 1000) throw new Error("❌ Minimum 1000 TAAMS requis");
+
+      const tx = await contract.stake(ethers.utils.parseEther(amount));
+      await tx.wait();
+
+      document.getElementById("status").innerText = `✅ ${amount} TAAMS stakés`;
+      updateStatus();
+    } catch (error) {
+      document.getElementById("status").innerText = `❌ Erreur staking : ${error.message}`;
+    }
+  }
+
+  async function unstakeTokens() {
+    try {
+      if (!contract || !userAddress) throw new Error("Portefeuille non connecté");
+
+      const tx = await contract.unstake();
+      await tx.wait();
+
+      document.getElementById("status").innerText = `📤 TAAMS destakés avec succès`;
+      updateStatus();
+    } catch (error) {
+      document.getElementById("status").innerText = `❌ Erreur destaking : ${error.message}`;
+    }
+  }
+
+  async function spinWheel() {
+    try {
+      if (!contract || !userAddress) throw new Error("Portefeuille non connecté");
+
+      document.getElementById("wheel").style.display = "block";
+      document.getElementById("wheel").classList.add("spinning");
+
+      const tx = await contract.spinWheel();
+      const receipt = await tx.wait();
+
+      const event = receipt.events?.find(e => e.event === "WheelSpun");
+      if (!event) throw new Error("Événement WheelSpun non détecté");
+
+      const reward = ethers.utils.formatEther(event.args.reward);
+      document.getElementById("status").innerText = `🎉 Vous avez gagné ${reward} TAAMS !`;
+
+      document.getElementById("wheel").classList.remove("spinning");
+      updateStatus();
+    } catch (error) {
+      document.getElementById("status").innerText = `❌ Erreur roue : ${error.message}`;
+      document.getElementById("wheel").classList.remove("spinning");
+    }
+  }
+</script>
+<script>
+  window.addEventListener("load", async () => {
+    if (window.ethereum && window.ethereum.selectedAddress) {
+      await connectWallet();
+    }
+  });
+
+  async function checkNetwork() {
+    const network = await provider.getNetwork();
+    const targetChainId = 11155111; // Exemple : Sepolia = 11155111
+    if (network.chainId !== targetChainId) {
+      document.getElementById("status").innerText =
+        `⚠️ Réseau incorrect : veuillez passer sur Sepolia pour interagir avec le contrat`;
+      throw new Error("Réseau non compatible");
+    }
+  }
+
+  async function connectWallet() {
+    if (window.ethereum) {
+      try {
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+        await checkNetwork();
+
+        signer = provider.getSigner();
+        userAddress = await signer.getAddress();
+        contract = new ethers.Contract(contractAddress, contractABI, signer);
+
+        document.getElementById("status").innerText = `✅ Connecté : ${userAddress}`;
+        updateStatus();
+      } catch (error) {
+        document.getElementById("status").innerText = `❌ Erreur connexion : ${error.message}`;
+      }
+    } else {
+      document.getElementById("status").innerText = "⚠️ MetaMask non détecté";
+    }
+  }
+
+  async function updateStatus() {
+    try {
+      document.getElementById("status").innerText = "⏳ Chargement des données...";
+      
+      if (!userAddress || !ethers.utils.isAddress(userAddress)) {
+        throw new Error("⚠️ Adresse utilisateur invalide ou non connectée");
+      }
+
+      const [balance, bl2pBalance, stakingInfo, eligibility] = await Promise.all([
+        contract.balanceOf(userAddress),
+        contract.bl2pClaimed(userAddress),
+        contract.getStakingInfo(userAddress),
+        contract.getWheelSpinEligibility(userAddress)
+      ]);
+
+      const eligible = eligibility.eligible;
+      const nextSpin = eligibility.nextSpinTime;
+
+      document.getElementById("status").innerHTML = `
+        <strong>Solde TAAMS</strong> : ${ethers.utils.formatEther(balance)} TAAMS<br>
+        <strong>Solde BL2P</strong> : ${ethers.utils.formatEther(bl2pBalance)} BL2P<br>
+        <strong>Staking</strong> : ${ethers.utils.formatEther(stakingInfo[0])} TAAMS<br>
+        <strong>Récompense staking</strong> : ${ethers.utils.formatEther(stakingInfo[2])} BL2P<br>
+        <strong>Prochain spin</strong> : ${
+          eligible ? "🎯 Disponible maintenant" : new Date(nextSpin * 1000).toLocaleString()
         }
-    </script>
+      `;
+
+      const spinEligible = eligible && bl2pBalance.gt(0);
+      document.getElementById("spinButton").disabled = !spinEligible;
+      document.getElementById("eligibilityMsg").innerText =
+        spinEligible ? "" : "🔒 Vous devez avoir des BL2P et être éligible pour tourner la roue.";
+    } catch (error) {
+      document.getElementById("status").innerText = `❌ Erreur mise à jour : ${error.message}`;
+    }
+  }
+</script>
+  </script>
 </body>
 </html>
