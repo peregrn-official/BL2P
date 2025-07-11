@@ -100,7 +100,7 @@
         <div id="wheel"></div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.0/dist/ethers.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
     <script>
         // Configuration du contrat
         const contractAddress = "0xA29A88632d550BadffE1C981a8C790654377C585";
@@ -622,37 +622,50 @@
 
         let provider, signer, contract, userAddress;
 
-        async function connectWallet() {
+        async function checkMetaMask() {
             if (!window.ethereum) {
                 document.getElementById("status").innerText = "MetaMask non détecté. Veuillez installer MetaMask.";
-                return;
+                return false;
             }
+            return true;
+        }
+
+        async function connectWallet() {
+            if (!(await checkMetaMask())) return;
 
             try {
                 provider = new ethers.providers.Web3Provider(window.ethereum, "any");
-                // Listen for network changes
+
+                // Gérer les changements de réseau
                 window.ethereum.on('chainChanged', () => {
-                    window.location.reload();
+                    document.getElementById("status").innerText = "Réseau changé. Reconnexion en cours...";
+                    contract = null;
+                    userAddress = null;
+                    document.getElementById("spinButton").disabled = true;
+                    connectWallet();
                 });
-                // Listen for account changes
-                window.ethereum.on('accountsChanged', (accounts) => {
+
+                // Gérer les changements de compte
+                window.ethereum.on('accountsChanged', async (accounts) => {
                     if (accounts.length === 0) {
-                        document.getElementById("status").innerText = "Veuillez connecter votre portefeuille MetaMask.";
+                        document.getElementById("status").innerText = "Portefeuille déconnecté. Veuillez reconnecter MetaMask.";
                         contract = null;
                         userAddress = null;
                         document.getElementById("spinButton").disabled = true;
                     } else {
-                        connectWallet();
+                        document.getElementById("status").innerText = "Compte changé. Reconnexion en cours...";
+                        await connectWallet();
                     }
                 });
 
+                // Vérifier le réseau (Sepolia par défaut)
                 const network = await provider.getNetwork();
-                const expectedChainId = 11155111; // Sepolia Testnet (adjust if different)
+                const expectedChainId = 11155111; // Sepolia Testnet
                 if (network.chainId !== expectedChainId) {
                     try {
                         await window.ethereum.request({
                             method: 'wallet_switchEthereumChain',
-                            params: [{ chainId: '0x' + expectedChainId.toString(16) }],
+                            params: [{ chainId: `0x${expectedChainId.toString(16)}` }],
                         });
                     } catch (switchError) {
                         if (switchError.code === 4902) {
@@ -660,7 +673,7 @@
                                 await window.ethereum.request({
                                     method: 'wallet_addEthereumChain',
                                     params: [{
-                                        chainId: '0x' + expectedChainId.toString(16),
+                                        chainId: `0x${expectedChainId.toString(16)}`,
                                         chainName: 'Sepolia Testnet',
                                         rpcUrls: ['https://rpc.sepolia.org'],
                                         nativeCurrency: {
@@ -673,47 +686,71 @@
                                 });
                             } catch (addError) {
                                 document.getElementById("status").innerText = `Erreur lors de l'ajout du réseau Sepolia : ${addError.message}`;
+                                console.error("Erreur ajout réseau :", addError);
                                 return;
                             }
                         } else {
                             document.getElementById("status").innerText = `Erreur de changement de réseau : ${switchError.message}`;
+                            console.error("Erreur changement réseau :", switchError);
                             return;
                         }
                     }
                 }
 
-                // Request account access
-                const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                // Vérifier les comptes connectés
+                const accounts = await window.ethereum.request({ method: 'eth_accounts' });
                 if (accounts.length === 0) {
-                    document.getElementById("status").innerText = "Connexion refusée ou aucun compte sélectionné.";
-                    return;
+                    // Demander la connexion
+                    try {
+                        const newAccounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                        if (newAccounts.length === 0) {
+                            document.getElementById("status").innerText = "Aucun compte sélectionné. Veuillez connecter un compte dans MetaMask.";
+                            return;
+                        }
+                    } catch (connectError) {
+                        if (connectError.code === 4001) {
+                            document.getElementById("status").innerText = "Connexion refusée par l'utilisateur.";
+                        } else {
+                            document.getElementById("status").innerText = `Erreur de connexion MetaMask : ${connectError.message}`;
+                        }
+                        console.error("Erreur connexion MetaMask :", connectError);
+                        return;
+                    }
                 }
 
+                // Initialiser le signer et l'adresse utilisateur
                 signer = provider.getSigner();
                 userAddress = await signer.getAddress();
+
+                // Initialiser le contrat
                 contract = new ethers.Contract(contractAddress, contractABI, signer);
 
-                // Verify contract exists
+                // Vérifier que le contrat est accessible
                 try {
-                    await contract.name(); // Simple call to verify contract
-                    document.getElementById("status").innerText = `Connecté : ${userAddress}`;
+                    const contractName = await contract.name();
+                    document.getElementById("status").innerText = `Connecté : ${userAddress} (Contrat : ${contractName})`;
                     document.getElementById("spinButton").disabled = false;
                     await updateStatus();
                 } catch (contractError) {
                     document.getElementById("status").innerText = `Erreur : Impossible de communiquer avec le contrat à l'adresse ${contractAddress}. Vérifiez l'adresse et le réseau.`;
                     contract = null;
                     document.getElementById("spinButton").disabled = true;
+                    console.error("Erreur contrat :", contractError);
                 }
             } catch (error) {
                 document.getElementById("status").innerText = `Erreur de connexion : ${error.message}`;
                 contract = null;
+                userAddress = null;
                 document.getElementById("spinButton").disabled = true;
+                console.error("Erreur connexion :", error);
             }
         }
 
         async function updateStatus() {
+            if (!(await checkMetaMask())) return;
             if (!contract || !userAddress) {
-                document.getElementById("status").innerText = "Veuillez connecter votre portefeuille.";
+                document.getElementById("status").innerText = "Veuillez connecter votre portefeuille MetaMask.";
+                document.getElementById("spinButton").disabled = true;
                 return;
             }
 
@@ -732,11 +769,13 @@
                 document.getElementById("spinButton").disabled = !eligible || bl2pBalance == 0;
             } catch (error) {
                 document.getElementById("status").innerText = `Erreur lors de la mise à jour : ${error.message}`;
+                console.error("Erreur updateStatus :", error);
             }
         }
 
         async function burnTokens() {
-            if (!contract) {
+            if (!(await checkMetaMask())) return;
+            if (!contract || !userAddress) {
                 document.getElementById("status").innerText = "Erreur : Portefeuille non connecté. Veuillez connecter MetaMask.";
                 return;
             }
@@ -744,17 +783,23 @@
             try {
                 const amount = document.getElementById("burnAmount").value;
                 if (!amount || amount <= 0) throw new Error("Montant invalide");
+                const isPaused = await contract.paused();
+                if (isPaused) throw new Error("Le contrat est en pause.");
+                const burnPhaseActive = await contract.burnPhaseActive();
+                if (!burnPhaseActive) throw new Error("La phase de burn n'est pas active.");
                 const tx = await contract.participateInBurn(ethers.utils.parseEther(amount));
                 await tx.wait();
                 document.getElementById("status").innerText = `Succès : ${amount} TAAMS brûlés`;
                 await updateStatus();
             } catch (error) {
                 document.getElementById("status").innerText = `Erreur : ${error.message}`;
+                console.error("Erreur burnTokens :", error);
             }
         }
 
         async function stakeTokens() {
-            if (!contract) {
+            if (!(await checkMetaMask())) return;
+            if (!contract || !userAddress) {
                 document.getElementById("status").innerText = "Erreur : Portefeuille non connecté. Veuillez connecter MetaMask.";
                 return;
             }
@@ -762,38 +807,48 @@
             try {
                 const amount = document.getElementById("stakeAmount").value;
                 if (!amount || amount < 1000) throw new Error("Montant minimum 1000 TAAMS");
+                const isPaused = await contract.paused();
+                if (isPaused) throw new Error("Le contrat est en pause.");
                 const tx = await contract.stake(ethers.utils.parseEther(amount));
                 await tx.wait();
                 document.getElementById("status").innerText = `Succès : ${amount} TAAMS stakés`;
                 await updateStatus();
             } catch (error) {
                 document.getElementById("status").innerText = `Erreur : ${error.message}`;
+                console.error("Erreur stakeTokens :", error);
             }
         }
 
         async function unstakeTokens() {
-            if (!contract) {
+            if (!(await checkMetaMask())) return;
+            if (!contract || !userAddress) {
                 document.getElementById("status").innerText = "Erreur : Portefeuille non connecté. Veuillez connecter MetaMask.";
                 return;
             }
 
             try {
+                const isPaused = await contract.paused();
+                if (isPaused) throw new Error("Le contrat est en pause.");
                 const tx = await contract.unstake();
                 await tx.wait();
                 document.getElementById("status").innerText = "Succès : TAAMS destakés";
                 await updateStatus();
             } catch (error) {
                 document.getElementById("status").innerText = `Erreur : ${error.message}`;
+                console.error("Erreur unstakeTokens :", error);
             }
         }
 
         async function spinWheel() {
-            if (!contract) {
+            if (!(await checkMetaMask())) return;
+            if (!contract || !userAddress) {
                 document.getElementById("status").innerText = "Erreur : Portefeuille non connecté. Veuillez connecter MetaMask.";
                 return;
             }
 
             try {
+                const isPaused = await contract.paused();
+                if (isPaused) throw new Error("Le contrat est en pause.");
                 document.getElementById("wheel").style.display = "block";
                 document.getElementById("wheel").classList.add("spinning");
                 const tx = await contract.spinWheel();
@@ -806,8 +861,22 @@
             } catch (error) {
                 document.getElementById("status").innerText = `Erreur : ${error.message}`;
                 document.getElementById("wheel").classList.remove("spinning");
+                console.error("Erreur spinWheel :", error);
             }
         }
+
+        // Vérifier l'état initial de MetaMask au chargement
+        window.addEventListener('load', async () => {
+            if (await checkMetaMask()) {
+                provider = new ethers.providers.Web3Provider(window.ethereum, "any");
+                const accounts = await window.ethereum.request({ method: 'eth_accounts' }).catch(() => []);
+                if (accounts.length > 0) {
+                    await connectWallet();
+                } else {
+                    document.getElementById("status").innerText = "Veuillez connecter votre portefeuille MetaMask.";
+                }
+            }
+        });
     </script>
 </body>
 </html>
